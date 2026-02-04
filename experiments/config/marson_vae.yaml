@@ -1,0 +1,130 @@
+# @package _global_
+experiment_name: marson_vae
+
+defaults:
+  - paths: user_paths
+  - model: vae_tiny
+  - training: default
+  - datamodule: single_anndata
+  - _self_
+
+seed: 56
+
+datamodule:
+  dataset: marson_hvg
+  datamodule:
+    sample_genes: "none"
+    genes_seq_len: 3699 # 4096
+    num_workers: 1
+    prefetch_factor: 4         # Optional
+    persistent_workers: true   # Optional
+    val_as_test: true          # Optional
+    seed: 42
+
+
+training:
+  num_epochs: 60
+  trainer:
+    enable_progress_bar: true
+    check_val_every_n_epoch: 10
+    precision: 32
+    gradient_clip_val: 10.
+    gradient_clip_algorithm: "norm"
+    accumulate_grad_batches: 1
+    deterministic: true
+    log_every_n_steps: 30
+    sync_batchnorm: true
+
+  callbacks:
+    model_checkpoints:
+      monitor: val_loss
+      mode: min
+      save_top_k: 3
+      save_last: true
+    reconstruction_viz:
+      _target_: scg_vae.viz_callbacks.ReconstructionVisualizationCallback
+      max_cells: 5000
+      device: "cuda"
+
+  logger:
+    wandb:
+      entity: null #null forces it to use logged-in wandb account's default
+      id: run_${now:%Y%m%d_%H%M%S}
+
+model:
+  batch_size: 8
+  test_batch_size: 8
+
+  # Decoder configuration
+  decoder_name: negative_binomial_shared_theta  # or negative_binomial_unshared_theta, discretized_gaussian, etc.
+
+  decoder_head:
+    negative_binomial_shared_theta:
+      _target_: scg_vae.stochastic_layers.NegativeBinomialTransformerLayer
+      n_genes: ${datamodule.label_encoder.n_genes}
+      shared_theta: true
+      n_embed: ${model.module.vae_model.encoder.n_embed}
+      norm_layer: ${model.module.vae_model.encoder.norm_layer}
+      layernorm_eps: ${model.module.vae_model.encoder.layernorm_eps}
+
+  # VAE module configuration
+  module:
+    _target_: scg_vae.models.VAE
+    compile: true
+    compile_mode: "default"
+
+    vae_scheduler:
+      fract_decay: 1.0
+      decay_type: cosine
+      final_lr_factor: 0.1  # End at 10% of max LR (default)
+
+    vae_model:
+      _target_: scg_vae.vae.TransformerVAE
+
+      encoder:
+        _target_: scg_vae.nnets.Encoder
+        n_layer: 8                  # Or ${model.n_layer}
+        n_embed: 256                 # Or ${model.n_embed}
+        n_embed_latent: 16           # Latent dimension
+        n_inducing_points: 256       # Number of inducing points
+        n_head: 4                    # Number of attention heads
+        n_head_cross: 4              # Cross-attention heads
+        dropout: 0.0
+        bias: false
+        multiple_of: 4               # FFN hidden dim = n_embed * multiple_of
+        layernorm_eps: 1e-8
+        norm_layer: layernorm        # or rmsnorm
+        positional_encoding: false    #whether to add positional embeddings to the encoder's latent representations.
+        latent_projection_type: "mlp"  #or "cross_attention"
+
+      decoder:
+        _target_: scg_vae.nnets.Decoder
+        n_genes: ${datamodule.label_encoder.n_genes}
+        n_embed: ${model.module.vae_model.encoder.n_embed}
+        n_embed_latent: ${model.module.vae_model.encoder.n_embed_latent}
+        n_head: ${model.module.vae_model.encoder.n_head}
+        n_head_cross: ${model.module.vae_model.encoder.n_head_cross}
+        n_layer: ${model.module.vae_model.encoder.n_layer}
+        n_inducing_points: ${model.module.vae_model.encoder.n_inducing_points}
+        dropout: ${model.module.vae_model.encoder.dropout}
+        bias: ${model.module.vae_model.encoder.bias}
+        multiple_of: ${model.module.vae_model.encoder.multiple_of}
+        layernorm_eps: ${model.module.vae_model.encoder.layernorm_eps}
+        norm_layer: ${model.module.vae_model.encoder.norm_layer}
+        shared_embedding: true  #when true decoder does NOT create its own gene embedding layer
+        use_adaln: false
+
+      input_layer:
+        _target_: scg_vae.layers.InputTransformerVAE
+        agg_func: softbin  # Options: log1p, log1pzero, anscombe, sqrt, proj, projconcat, softbin
+
+    vae_optimizer:
+      _target_: scg_vae.optimizers.AdamWLegacy
+      _partial_: true
+      lr: 1e-4
+      weight_decay: 0.01
+      betas: [0.9, 0.95]
+
+    generation_args:
+      guidance_weight: ${datamodule.dataset_params.${datamodule.dataset}.guidance_weight}
+      timesteps: 50

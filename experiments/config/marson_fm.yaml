@@ -1,0 +1,110 @@
+# @package _global_
+experiment_name: marson_fm
+
+defaults:
+  - paths: user_paths
+  - model: ldm_small
+  - training: default
+  - datamodule: single_anndata
+  - _self_
+
+seed: 56
+
+datamodule:
+  dataset: marson_hvg
+  datamodule:
+    sample_genes: "none"
+    genes_seq_len: 3699 # 4096
+    num_workers: 4
+    prefetch_factor: 8         # Optional
+    persistent_workers: true   # Optional
+    val_as_test: true          # Optional
+    seed: 42
+
+
+training:
+  num_epochs: 150
+  trainer:
+    enable_progress_bar: true
+    check_val_every_n_epoch: 15
+    precision: 32
+    gradient_clip_val: 1.0
+    gradient_clip_algorithm: "norm"
+    accumulate_grad_batches: 1
+    deterministic: true
+    log_every_n_steps: 15
+    sync_batchnorm: true #But let's not use batchnorm!
+    profiler: null #TEST to see if it helps with failure toward the end of training in profiler
+
+  callbacks:
+    model_checkpoints:
+      monitor: val_loss
+      mode: min
+      save_top_k: 3
+      save_last: true
+      save_weights_only: false
+    #reconstruction_viz:
+    #  _target_: scg_vae.viz_callbacks.ReconstructionVisualizationCallback
+    #  max_cells: 5000
+    #  device: "cuda"
+
+  logger:
+    wandb:
+      entity: #null forces it to use logged-in wandb account's default
+      settings:
+        init_timeout: 120  # Increase timeout to 2 minutes
+
+model:
+  batch_size: 64
+  test_batch_size: 64
+
+  # VAE module configuration
+  module:
+    compile: true
+    compile_mode: "default"
+
+    # Override diffusion model embed size to 512
+    diffusion_model:
+      nnet:
+        n_embed: 512
+        condition_strategy: "joint"
+        use_gpt_for_gene_ko: false
+        gene_ko_class_name: "guide_target_ensembl"
+        control_perturbation_name: "NTC"
+
+    vae_as_tokenizer:
+      train: ${vae_model_params.train}
+      load_from_checkpoint:
+        ckpt_path: ${vae_model_params.ckpt_path}
+        job_name: ${vae_model_params.vae_model_name}
+        epoch: ${vae_model_params.epoch}
+
+    generation_args:
+      guidance_weight: ${datamodule.dataset_params.${datamodule.dataset}.guidance_weight}
+      timesteps: 50
+
+    eval_generation:
+      freq: 50 # every n epochs
+      sample_size: 10000 # number of cells to sample from the val/test dataset
+      enabled: true # whether to run the generation evaluation
+      warmup_epochs: ${eval:'${training.num_epochs} // 2'}
+      store_latents: false
+
+    diffusion_optimizer:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 3e-5 # divide by 4 + 0.5e-5 to use 4 nodes for training --> I'd like to disable the default LR scaling by number of nodes!
+      betas: [0.9, 0.999]
+      eps: 1e-8
+      weight_decay: 0.01
+
+    diffusion_scheduler:
+      final_lr_factor: 0.1
+      fract_decay: 1.0
+      decay_type: cosine
+
+vae_model_params:
+  ckpt_path: ${paths.vae_checkpoint_path}
+  train: false
+  epoch: null
+  vae_model_name: marson_vae

@@ -1,0 +1,11 @@
+_target_: common.sweeps.RunaiLauncherConf
+_partial_: true
+project: cell-studio
+gpus: 8
+pods: 1
+large_shm: true
+backoff_limit: 0
+env_init: init.sh # gcflow
+name: ${experiment_name}
+data:
+  - "cell-studio-pvc=/mnt/"

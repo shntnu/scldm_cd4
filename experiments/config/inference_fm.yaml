@@ -1,0 +1,48 @@
+# @package _global_
+experiment_name: inference_fm
+
+defaults:
+  - paths: user_paths
+  - model: ldm_small
+  - training: default
+  - datamodule: single_anndata
+  - _self_
+
+seed: 56
+
+inference_path: ${paths.inference_output}
+
+datamodule:
+  dataset: marson_hvg
+  base_data_path: ${paths.data_path}
+  datamodule:
+    sample_genes: none
+
+model:
+  test_batch_size: 64
+  module:
+    generation_args:
+      conditioning_strategy: "joint"
+      guidance_weight: ${datamodule.dataset_params.${datamodule.dataset}.guidance_weight}
+      num_inference_steps: 50
+      seed: 56
+
+
+training:
+  callbacks:
+    model_checkpoints:
+      dirpath: ${paths.pretrained_checkpoint_path}
+      filename: "last.ckpt"
+
+  logger:
+    wandb:
+      name: ${experiment_name}
+      id: null
+      entity: #null forces it to use logged-in wandb account's default
+      settings:
+        init_timeout: 120  # Increase timeout to 2 minutes
+
+
+# Generation specific parameters
+dataset_generation_idx: 0
+ckpt_file: "last.ckpt"

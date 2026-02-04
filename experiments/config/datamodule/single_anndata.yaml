@@ -1,0 +1,60 @@
+defaults:
+  - /paths/user_paths
+
+datamodule:
+  _target_: scg_vae.datamodule.SimplifiedDataModule
+  train_adata_path: ${datamodule.dataset_params.${datamodule.dataset}.adata_train}
+  test_adata_path: ${datamodule.dataset_params.${datamodule.dataset}.adata_test}
+  adata_attr: ${datamodule.dataset_params.${datamodule.dataset}.adata_attr}
+  adata_key: ${datamodule.dataset_params.${datamodule.dataset}.adata_key}
+  vocabulary_encoder: ${datamodule.label_encoder}
+  batch_size: ${model.batch_size}
+  test_batch_size: ${model.test_batch_size}
+  num_workers:  16
+  seed: ${seed}
+  prefetch_factor: 8
+  persistent_workers: true
+  drop_last_indices: true
+  drop_incomplete_batch: true
+  sample_genes: none
+  genes_seq_len: ${datamodule.dataset_params.${datamodule.dataset}.genes_seq_len}
+  val_as_test: false
+  hvg_genes_path: ${datamodule.dataset_params.${datamodule.dataset}.hvg_genes_path}
+
+label_encoder:
+  _target_: scg_vae.encoder.VocabularyEncoderSimplified
+  adata_path: ${datamodule.dataset_params.${datamodule.dataset}.adata_train}
+  mask_token: "<MASK>"
+  mask_token_idx: 0
+  n_genes: ${datamodule.dataset_params.${datamodule.dataset}.n_genes}
+  class_vocab_sizes: ${datamodule.dataset_params.${datamodule.dataset}.class_vocab_sizes}
+  guidance_weight: ${datamodule.dataset_params.${datamodule.dataset}.guidance_weight}
+  mu_size_factor: ${datamodule.dataset_params.${datamodule.dataset}.mu_size_factor}
+  sd_size_factor: ${datamodule.dataset_params.${datamodule.dataset}.sd_size_factor}
+  condition_strategy: ${datamodule.dataset_params.${datamodule.dataset}.condition_strategy}
+  gpt_gene_embeddings_path: ${datamodule.dataset_params.${datamodule.dataset}.gpt_gene_embeddings_path}
+
+dataset: null
+
+dataset_params:
+  # restricted to HVGs for faster experiments
+  marson_hvg:
+    adata_train: ${paths.data_path}/train_hvg/adata_1.h5ad
+    adata_test: ${paths.data_path}/test_hvg/adata_1_2k.h5ad
+    hvg_genes_path: null
+    gpt_gene_embeddings_path: null
+    n_genes: 3699
+    mu_size_factor: ${paths.data_path}/size_factors_hvg/log_size_factor_mu.pkl # it stores simplified keys, also uses new version of the code
+    sd_size_factor: ${paths.data_path}/size_factors_hvg/log_size_factor_sd.pkl # it stores simplified keys, also uses new version of the code
+    genes_seq_len: 3699
+    adata_attr: X
+    adata_key: null
+    class_vocab_sizes:
+      donor_id: 4
+      guide_target_ensembl: 10571
+      experimental_perturbation_time_point: 3
+    guidance_weight:
+      donor_id: 1.0
+      guide_target_ensembl: 1.0
+      experimental_perturbation_time_point: 1.0
+    condition_strategy: "joint"

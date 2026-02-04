@@ -1,0 +1,67 @@
+datamodule:
+  _target_: scg_vae.datamodule.CellariumDataModule
+  vocabulary_encoder: ${datamodule.label_encoder}
+  data_path: /mnt/czi-sci-ai/project-scg-llm-pvc/data/census_adata/${datamodule.dataset}
+  batch_size: ${model.batch_size}
+  test_batch_size: 64
+  num_workers: 16
+  seed: ${seed}
+  indices_strict: false
+  iteration_strategy: cache_efficient
+  max_cache_size: 64 # 16
+  index_unique: '-'
+  prefetch_factor: 8 #4
+  persistent_workers: true
+  drop_last_indices: true
+  drop_incomplete_batch: true
+  metadata_file: metadata.json
+  val_as_test: false
+  cp_files: false
+
+label_encoder:
+  _target_: scg_vae.encoder.VocabularyEncoder
+  adata: ${datamodule.datamodule.data_path}/train/adata_batch_0.h5ad # any adata
+  metadata_cells: ${datamodule.datamodule.data_path}/train_cells.parquet
+  metadata_genes: ${datamodule.datamodule.data_path}/genes.parquet
+  labels: [assay, suspension_type]
+  n_genes: ${datamodule.dataset_params.${datamodule.dataset}.n_genes}
+  assay_vocab_size: ${datamodule.dataset_params.${datamodule.dataset}.assay_vocab_size}
+  suspension_vocab_size: ${datamodule.dataset_params.${datamodule.dataset}.suspension_vocab_size}
+  mask_token_idx: 0
+  class_vocab_sizes:
+    assay: ${datamodule.dataset_params.${datamodule.dataset}.assay_vocab_size}
+    suspension_type: ${datamodule.dataset_params.${datamodule.dataset}.suspension_vocab_size}
+
+dataset: null
+
+
+
+dataset_params:
+  hlca:
+    n_genes: 8000
+    assay_vocab_size: 5
+    suspension_vocab_size: 1
+  hs-heart:
+    n_genes: 8000
+    assay_vocab_size: 7
+    suspension_vocab_size: 2
+  hs-lung:
+    n_genes: 8000
+    assay_vocab_size: 16
+    suspension_vocab_size: 2
+  tabula_sapiens:
+    n_genes: 8000
+    assay_vocab_size: 4
+    suspension_vocab_size: 1
+  hs:
+    n_genes: 20_000
+    assay_vocab_size: 28
+    suspension_vocab_size: 2
+  pbmc3k-2k:
+    n_genes: 2000
+    assay_vocab_size: 1
+    suspension_vocab_size: 1
+  census_human:
+    n_genes: 36423
+    assay_vocab_size: 28
+    suspension_vocab_size: 2
