@@ -32,7 +32,7 @@ training:
   callbacks:
     model_checkpoints:
       dirpath: ${paths.pretrained_checkpoint_path}
-      filename: "last.ckpt"
+      filename: "model.safetensors"
 
   logger:
     wandb:
@@ -45,4 +45,4 @@ training:
 
 # Generation specific parameters
 dataset_generation_idx: 0
-ckpt_file: "last.ckpt"
+ckpt_file: "model.safetensors"

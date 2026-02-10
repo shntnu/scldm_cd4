@@ -40,7 +40,7 @@ class NotebookInference:
 
         # Load model and run inference
         results = inferencer.run_inference(
-            checkpoint_path="/path/to/checkpoint.ckpt",
+            checkpoint_path="/path/to/model.safetensors",
             output_dir="/path/to/output",
             generation_idx=0,
             batch_size=32
@@ -278,6 +278,19 @@ class NotebookInference:
                 test_batch_size=test_batch_size
             )
 
+        # --- Load checkpoint ---
+        ckpt_extension = pathlib.Path(checkpoint_path).suffix.lower()
+
+        if ckpt_extension == ".safetensors":
+            from safetensors.torch import load_file as load_safetensors
+            print(f"Loading SafeTensors checkpoint: {checkpoint_path}")
+            state_dict = load_safetensors(checkpoint_path, device=device)
+            self.module.load_state_dict(state_dict)
+            ckpt_path_for_trainer = None  # already loaded
+        else:
+            print(f"Using standard checkpoint: {checkpoint_path}")
+            ckpt_path_for_trainer = checkpoint_path  # Lightning will load it internally
+
         # Create output directory
         pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -301,7 +314,7 @@ class NotebookInference:
             output = trainer.predict(
                 self.module,
                 datamodule=self.datamodule,
-                ckpt_path=checkpoint_path,
+                ckpt_path=ckpt_path_for_trainer,
             )
 
             # Process output
