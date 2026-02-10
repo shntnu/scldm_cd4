@@ -1,0 +1,30 @@
+defaults:
+  - ldm_base
+
+module:
+  _target_: scg_vae.models.LatentDiffusion
+  diffusion_model:
+    _target_: scg_vae.diffusion.FlowMatching
+    nnet:
+      _target_: scg_vae.nnets.DiT
+      n_embed_input: ${model.module.vae_model.encoder.n_embed_latent}
+      n_embed: ${model.module.vae_model.encoder.n_embed}
+      n_layer: 8
+      n_head: 8
+      dropout: 0.0
+      bias: false
+      norm_layer: layernorm
+      multiple_of: 4
+      layernorm_eps: ${model.module.vae_model.encoder.layernorm_eps}
+      class_vocab_sizes: ${datamodule.label_encoder.class_vocab_sizes}
+      seq_len: ${model.module.vae_model.encoder.n_inducing_points}
+      use_gpt_for_gene_ko: false  # Optional: enable GPT embeddings for gene-KO condition class
+      gene_ko_class_name: "guide_target_ensembl"  # Optional: which condition class to use GPT embeddings for
+      control_perturbation_name: "NTC"  # Optional: name of control perturbation (e.g., "NTC")
+    n_inducing_points: ${model.module.vae_model.encoder.n_inducing_points}
+    sigma: 0.0001
+    v: 0.
+    timesteps: 50
+    cfm: false
+
+batch_size: 256
