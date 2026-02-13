@@ -19,7 +19,7 @@ cd scldm_cd4
 ---
 
 ### 2. Download Model Checkpoint and Config from Huggingface
-the latest model checkpoint and `config.yaml` are available at https://huggingface.co/biohub/scldm_cd4
+The latest model checkpoint and `config.yaml` are available at https://huggingface.co/biohub/scldm_cd4
 
 The repo is currently configured to expect both of them in a top level directory named `model/`, but you can update paths as needed in step 5.
 
@@ -27,7 +27,7 @@ The repo is currently configured to expect both of them in a top level directory
 
 ### 3. Initialize the environment
 
-If you have `sudo` access, run the initialization script to set up the virtual environment and dependencies:
+Run the initialization script to set up the virtual environment and dependencies:
 
 ```bash
 ./init.sh

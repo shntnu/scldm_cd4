@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from safetensors.torch import load_file as load_safetensors
 
 os.environ["HYDRA_FULL_ERROR"] = "1"
 
@@ -240,9 +241,19 @@ def train(cfg) -> None:
         checkpoint_dir = pathlib.Path(cfg.training.callbacks.model_checkpoints.dirpath)
         last_checkpoint = checkpoint_dir / cfg.ckpt_file
         ckpt_path = last_checkpoint if last_checkpoint.exists() else None
+        is_safetensors = ckpt_path.suffix.lower() == ".safetensors" if ckpt_path else False
         # if ckpt_path is not None:
         #     maybe_fix_compiled_weights(ckpt_path, diffusion_compile=cfg.model.compile, vae_compile=False)
         # trainer.fit(module, datamodule=datamodule, ckpt_path=ckpt_path)
+
+        if is_safetensors:
+            device = torch.cuda.current_device() if torch.cuda.is_available() else "cpu"
+            state_dict = load_safetensors(str(ckpt_path), device=device)
+            module.load_state_dict(state_dict)
+            ckpt_path_for_trainer = None
+        else:
+            ckpt_path_for_trainer = ckpt_path
+
         if dist.is_initialized():
             dist.barrier()
 
@@ -256,7 +267,7 @@ def train(cfg) -> None:
             output = trainer.predict(
                 module,
                 datamodule=datamodule,
-                ckpt_path=ckpt_path,
+                ckpt_path=ckpt_path_for_trainer,
             )
 
             # Each GPU processes its portion of the output
