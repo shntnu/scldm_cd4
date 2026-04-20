@@ -106,3 +106,22 @@ INSTRUCTIONS: Add log at the end of the file. See "Maintenance Guidelines" and "
 ### Unresolved issues
 
 - `train.py` uses the same `WORLD_SIZE = PET_NNODES * RUNAI_NUM_OF_GPUS` pattern (per CLAUDE.md); LR scaling is also keyed off it. Haven't audited whether this breaks identically under plain torchrun — defer until we actually want to train.
+
+---
+
+## 2026-04-19: Scoped quantitative eval of generated vs. real cells — deferred
+
+### What was done
+
+- Read-only scan of `src/scg_vae/evaluations.py`, `mmd.py`, `notebook_inference.py` to map the metric API and the notebook's inference path. No code changes.
+- Drafted an `evaluate(adata_gen, adata_real, ...) -> dict` signature that wraps `mix_rbf_mmd2`, `BrayCurtisKernel`-MMD, and `wasserstein(sinkhorn)` — pure tensor kernels, no AnnData inside `evaluations.py`/`mmd.py`.
+
+### Key findings or decisions
+
+- `notebook_inference.inference()` (`mode="predict"`) uses the **same** `process_generation_output` path as `inference_ddp.py`; generated adata structure is identical between the two. `.obs["dataset"]` split into `generated_unconditional` / `generated_conditional` comes from that shared function, not the notebook.
+- No R² helper in `evaluations.py`; whatever R² lives in `LatentDiffusion.test_step` (`models.py`) hasn't been surfaced. Would need a small from-scratch per-gene-mean R² if we want it.
+- Concurrent marimo migration in a different Claude Code session is live-editing `notebooks/quickstart_tutorial.py` via `marimo-pair`. **Rule: this session does not touch the notebook file.** Eval, if built, lives as a standalone module with both a CLI entry point and an importable `evaluate()` function so the marimo session can call it without round-tripping through disk.
+
+### Unresolved issues
+
+- **Deferred**: three design questions (latent vs. expression space, conditional-only vs. both splits, include R² or skip) — punt until we actually need the metrics. Nothing built yet.
