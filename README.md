@@ -25,7 +25,7 @@ The repo is currently configured to expect both of them in a top level directory
 
 ---
 
-### 3. Initialize the environment
+### 3a. Initialize the environment (default, uv + venv)
 
 Run the initialization script to set up the virtual environment and dependencies:
 
@@ -34,6 +34,34 @@ Run the initialization script to set up the virtual environment and dependencies
 ```
 
 This will create a new virtual environment under `venv/scldm_cd4`.
+
+---
+
+### 3b. Alternative: NixOS / pixi
+
+If you're on NixOS, or prefer [pixi](https://pixi.sh) for reproducible environments, this repo ships a `flake.nix` plus a `[tool.pixi.*]` block in `pyproject.toml`. From the repo root:
+
+```bash
+direnv allow           # if using direnv; else: `nix develop`
+pixi install           # solves and installs (~3-5 min cold)
+pixi shell             # OR invoke tasks directly via `pixi run <task>`
+```
+
+Task shortcuts — each accepts an optional positional GPU count (default 4):
+
+- `pixi run test` — full test suite; `pixi run test-fast` — CPU-only subset
+- `pixi run vae [N]` / `pixi run fm [N]` — train VAE / flow matching on `N` GPUs
+- `pixi run infer [N]` — inference on `N` GPUs
+- `pixi run size-factors --data_dir ... --output_dir ...` — see step 4
+- `pixi run jupyter` — launch JupyterLab against `notebooks/`
+
+Hydra overrides pass through after the positional argument:
+
+```bash
+pixi run infer 4 training.num_epochs=1
+```
+
+The Nix flake provides `pixi` plus the env vars triton needs on NixOS (`LD_LIBRARY_PATH` and `TRITON_LIBCUDA_PATH`). On non-NixOS hosts, `pixi install` works standalone without `nix develop`.
 
 ---
 
@@ -58,7 +86,7 @@ This will generate two size factor files: `log_size_factor_mu.pkl` and `log_size
 
 ### 5. Configure user paths
 
-Edit the paths in `experiments/config/paths/user_paths.yaml` as necessary.
+The shipped defaults in `experiments/config/paths/user_paths.yaml` are repo-relative (`./model`, `./quickstart_data`, `./runs`, `./output`) and work out of the box if you launch from the repo root and downloaded the HuggingFace checkpoint into `./model/`. Only edit this file if your data or checkpoint live elsewhere.
 
 To run inference from a pretrained checkpoint, you will need to specify:
  - `data_path`

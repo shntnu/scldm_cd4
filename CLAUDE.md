@@ -20,6 +20,8 @@ Python 3.11–3.12 only. The project uses `uv` + an editable install. Use the in
 source venv/scldm_cd4/bin/activate
 ```
 
+**Alternative (NixOS or any pixi host):** `pixi install` then `pixi shell` — env defined under `[tool.pixi.*]` in `pyproject.toml` and activated via `flake.nix` devShell. Task aliases: `pixi run test` / `test-fast` / `vae [N]` / `fm [N]` / `infer [N]` (`N` = `--nproc-per-node`, default 4). README section 3b has the full flow.
+
 Tests (pytest, CPU-only by default — `-m "not rapids"` is the default via `pyproject.toml`):
 
 ```bash
@@ -69,6 +71,13 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 - **Safetensors inference path**: `inference_fm.yaml` pins `filename: "model.safetensors"` / `ckpt_file: "model.safetensors"` — the HF-released checkpoint is safetensors, not a Lightning `.ckpt`.
 - **GPT gene embeddings** (optional): if the datamodule's `VocabularyEncoderSimplified` provides `gpt_gene_embeddings`, `train.py` injects them into both the VAE input layer and (if `use_gpt_for_gene_ko=true`) the DiT's gene-KO conditioning — including the EMA DiT. Don't remove this injection logic silently.
 
+## NixOS specifics (pixi path only)
+
+- `flake.nix` devShell sets `LD_LIBRARY_PATH=/run/opengl-driver/lib` (for `libcuda.so.1`) and `TRITON_LIBCUDA_PATH=/run/opengl-driver/lib` (bypasses triton's hardcoded `/sbin/ldconfig` probe that fails on NixOS).
+- `cuda-cudart-dev` is in `[tool.pixi.dependencies]` because triton JIT-compiles a C helper on first use that `#include`s `cuda.h` — the runtime-only conda pytorch doesn't ship headers.
+- After editing `flake.nix`, `direnv reload` (or exit + re-enter the shell) to pick up new env vars; `pixi run` in an already-active shell won't see them.
+- `numpyro<0.20` pinned in pixi deps: 0.20.x imports `jit_p` from `jax.extend.core.primitives`, which jax 0.6 renamed to `pjit_p`.
+
 ## Code map
 
 `src/scg_vae/`:
@@ -101,3 +110,6 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 - **`norm_factor_path` / normalizer computation** in `train.py` is commented-out. If re-enabling, broadcast across ranks before use (the skeleton is already there).
 - **Checkpointing on FM**: `save_weights_only: false` is required because the EMA model state is serialized alongside.
 - **Run:AI YAMLs** in `experiments/config/runai/` are launcher-side manifests (not Hydra configs); they aren't loaded by `train.py`.
+- **Stale-symbol diagnosis**: when a test fails with `ImportError` / `TypeError` on a symbol, run `git log --all -S '<symbol>' -- src/` before writing code — three symbols were referenced by tests but never shipped (`_random_mask`, `StraightLineDiffusion`, `DiT(use_adaln=...)`), all from an aborted refactor. `vae.py`'s `masking_prop` / `mask_token_idx` args are similar dead code (they're accepted by `TransformerVAE.forward` but the active `InputTransformerVAE.forward` takes only 2 args).
+- **Default paths** in `experiments/config/paths/user_paths.yaml` are repo-relative (`./model`, `./quickstart_data`, `./runs`, `./output`) and assume launch from repo root. Hydra 1.2+ defaults `hydra.job.chdir=false` so CWD doesn't change mid-run. The `../` paths in older forks are broken.
+- **Wandb** defaults to the caller's personal `api.wandb.ai` unless `WANDB_BASE_URL` is set (CZI's internal is `https://czi.wandb.io`, exported by `init.sh` but NOT by the flake/pixi path). `training/default.yaml` sets `entity: scg-vae`; `inference_fm.yaml` clears entity, so inference logs to the logged-in user's default namespace.
