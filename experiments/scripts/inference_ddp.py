@@ -64,7 +64,7 @@ def train(cfg) -> None:
     # Initialize the distributed environment
     # Set the device before initializing process group
     torch.cuda.set_device(local_rank)
-    if WORLD_SIZE > 1:
+    if WORLD_SIZE_ENV > 1:
         dist.init_process_group(backend="nccl")
         os.environ["PL_TORCH_DISTRIBUTED_BACKEND"] = "nccl"
     is_main_process = (world_size == 1) or (global_rank == 0) #Only rank 0 does logging/saving
