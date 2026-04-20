@@ -28,7 +28,7 @@ dependencies = [
   "ema-pytorch==0.7.7",
   "hydra-core",
   "jax==0.6.2",
-  "lightning==2.4",
+  "lightning==2.4.*",
   "pot[backend-torch]",
   "psutil",
   "pybiomart",
@@ -36,10 +36,10 @@ dependencies = [
   "rich",
   "scikit-misc",
   "scvi-tools==1.2.1",
-  "torch==2.7",
+  "torch==2.7.*",
   "torch-optimizer",
   "torchdyn",
-  "torchmetrics==1.6",
+  "torchmetrics==1.6.*",
   "wandb",
 ]
 
@@ -110,3 +110,93 @@ source = [ "scg_vae" ]
 omit = [
   "**/test_*.py",
 ]
+
+# --------------------------------------------------------------------------
+# Pixi configuration (NixOS-friendly: pixi is the only package manager here)
+# --------------------------------------------------------------------------
+
+[tool.pixi.workspace]
+channels = [ "conda-forge" ]
+platforms = [ "linux-64" ]
+
+# Tell pixi we expect a CUDA-capable host; the NVIDIA driver is provided by the
+# Nix flake's LD_LIBRARY_PATH. `cuda-version` below pins the runtime libraries.
+[tool.pixi.system-requirements]
+cuda = "12.6"
+
+[tool.pixi.dependencies]
+python = "3.11.*"
+pytorch = "2.7.*"             # conda-forge name for PyPI `torch`; pixi aliases them
+cuda-version = "12.6.*"       # conda-forge pulls matching cudnn/nccl as transitive deps
+lightning = "2.4.*"           # conda-forge name for PyPI `pytorch-lightning`
+torchmetrics = "1.6.*"
+hydra-core = "*"
+anndata = "*"
+wandb = "*"
+rich = "*"
+boto3 = "*"
+psutil = "*"
+pynvml = "*"
+scikit-misc = "*"
+pot = "*"
+jax = "==0.6.2"
+scvi-tools = "==1.2.1"
+cellxgene-census = "==1.16.2"
+# Pin: numpyro 0.20.x imports `jit_p` from jax.extend.core.primitives, which
+# jax 0.6 renamed to `pjit_p`. Older numpyro works; scvi-tools 1.2.1 only
+# requires numpyro>=0.12.1 so this is safe.
+numpyro = "<0.20"
+
+[tool.pixi.pypi-dependencies]
+# Editable install of this repo. pixi resolves [project].dependencies across
+# conda+pypi and de-dupes against the conda entries above, so torch won't be
+# reinstalled from PyPI.
+scg_vae = { path = ".", editable = true }
+
+# Git source (cellarium-ml isn't published to conda-forge or PyPI).
+cellarium-ml = { git = "https://github.com/giovp/cellarium-ml.git", rev = "main" }
+
+# PyPI-only wheels (not on conda-forge or out-of-date there).
+deepspeed = "*"
+"ema-pytorch" = "==0.7.7"
+torchdyn = "*"
+"torch-optimizer" = "*"
+pybiomart = "*"
+
+[tool.pixi.feature.dev.dependencies]
+pytest = "*"
+pytest-cov = "*"
+coverage = "*"
+ipykernel = "*"
+jupyterlab = "*"
+pre-commit = "*"
+
+[tool.pixi.environments]
+default = { features = [ "dev" ], solve-group = "default" }
+
+[tool.pixi.tasks]
+# Testing
+test = "pytest"
+test-fast = "pytest tests/test_encoder.py tests/test_misc.py"
+
+# Data prep (required once per new h5ad)
+size-factors = "python scripts/compute_log_size_factors.py --config_path experiments/config/datamodule/single_anndata.yaml --dataset_name marson_hvg --fallback_conditions experimental_perturbation_time_point donor_id"
+
+# Notebook
+jupyter = "jupyter lab notebooks/"
+
+# Training / inference (mirror the torchrun invocations from README).
+# `gpus` is a positional arg, default 4 (this box).
+# Usage: `pixi run vae` → 4 GPUs; `pixi run vae 8` → 8 GPUs.
+# Hydra overrides pass through: `pixi run vae 4 training.num_epochs=10`.
+[tool.pixi.tasks.vae]
+cmd = "torchrun --nnodes 1 --nproc-per-node {{ gpus }} experiments/scripts/train.py --config-name=marson_vae"
+args = [{ "arg" = "gpus", "default" = "4" }]
+
+[tool.pixi.tasks.fm]
+cmd = "torchrun --nnodes 1 --nproc-per-node {{ gpus }} experiments/scripts/train.py --config-name=marson_fm"
+args = [{ "arg" = "gpus", "default" = "4" }]
+
+[tool.pixi.tasks.infer]
+cmd = "torchrun --nnodes 1 --nproc-per-node {{ gpus }} experiments/scripts/inference_ddp.py --config-name=inference_fm"
+args = [{ "arg" = "gpus", "default" = "4" }]

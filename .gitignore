@@ -184,3 +184,10 @@ data/
 # Globus Connect Personal
 globusconnectpersonal-*.tgz
 globusconnectpersonal-*/
+
+# Nix / direnv / pixi caches (regenerated on `direnv reload` / `pixi install`)
+.direnv/
+.pixi/
+.claude/
+result
+result-*
