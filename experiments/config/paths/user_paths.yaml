@@ -1,6 +1,6 @@
-data_path: ../quickstart_data
-experiment_path: ../experiments
-pretrained_checkpoint_path: ../model
+data_path: ./quickstart_data
+experiment_path: ./runs
+pretrained_checkpoint_path: ./model
 vae_checkpoint_path:
 fm_checkpoint_path:
-inference_output: ../output
+inference_output: ./output

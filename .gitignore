@@ -191,3 +191,9 @@ globusconnectpersonal-*/
 .claude/
 result
 result-*
+
+# Downloaded model checkpoints and training/inference outputs (at repo root).
+# Leading `/` anchors at repo root so we don't match arbitrary subdirectories.
+/model/
+/output/
+/runs/
