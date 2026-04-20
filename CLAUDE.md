@@ -13,14 +13,17 @@ Input is CD4+ Perturb-seq `.h5ad` (Zhu et al. 2025 preprint). The pretrained FM 
 
 ## Environment / commands
 
-Python 3.11–3.12 only. The project uses `uv` + an editable install. Use the init script (creates `venv/scldm_cd4/`, installs deps incl. `cellarium-ml` from git, installs pre-commit, exports NCCL/UCX env vars):
+Python 3.11 via pixi, activated by the repo's Nix flake. From the repo root:
 
 ```bash
-./init.sh
-source venv/scldm_cd4/bin/activate
+direnv allow           # or: nix develop
+pixi install           # solves + installs the env
+pixi shell             # OR run tasks directly via `pixi run <task>`
 ```
 
-**Alternative (NixOS or any pixi host):** `pixi install` then `pixi shell` — env defined under `[tool.pixi.*]` in `pyproject.toml` and activated via `flake.nix` devShell. Task aliases: `pixi run test` / `test-fast` / `vae [N]` / `fm [N]` / `infer [N]` (`N` = `--nproc-per-node`, default 4). README section 3b has the full flow.
+Task aliases: `pixi run test` / `test-fast` / `vae [N]` / `fm [N]` / `infer [N]` (`N` = GPUs, default 4). Hydra overrides pass through positionally: `pixi run infer 4 training.num_epochs=1`.
+
+The legacy `./init.sh` (uv + venv) path still exists for non-Nix hosts — see README section 3a. Don't use it here.
 
 Tests (pytest, CPU-only by default — `-m "not rapids"` is the default via `pyproject.toml`):
 
@@ -34,18 +37,15 @@ Pre-commit hooks are minimal (trailing whitespace, EOF, merge-conflict, private-
 
 ## Running training / inference
 
-All entry points are Hydra apps launched via `torchrun`. The config-name selects the experiment (see `experiments/config/*.yaml`):
+All entry points are Hydra apps launched via `torchrun`. Pixi task aliases wrap the invocations:
 
 ```bash
-# Train VAE (stage 1)
-torchrun --nnodes 1 --nproc-per-node 8 experiments/scripts/train.py --config-name=marson_vae
-
-# Train flow-matching on frozen VAE latents (stage 2)
-torchrun --nnodes 1 --nproc-per-node 8 experiments/scripts/train.py --config-name=marson_fm
-
-# Inference from a pretrained checkpoint
-torchrun --nnodes 1 --nproc-per-node 8 experiments/scripts/inference_ddp.py --config-name=inference_fm
+pixi run vae   [N]        # Stage 1 — Transformer VAE
+pixi run fm    [N]        # Stage 2 — flow-matching DiT on frozen VAE latents
+pixi run infer [N]        # inference from a pretrained checkpoint
 ```
+
+The raw `torchrun --nnodes 1 --nproc-per-node N experiments/scripts/{train,inference_ddp}.py --config-name=...` form still works if you need flags the tasks don't expose.
 
 The tutorial notebook `notebooks/quickstart_tutorial.ipynb` drives inference on a single GPU (CPU-only inference is untested). The size-factor precompute step (`scripts/compute_log_size_factors.py`) is required before training or inference on **new** data; quickstart data under `quickstart_data/size_factors_hvg/` is already precomputed.
 
@@ -71,7 +71,7 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 - **Safetensors inference path**: `inference_fm.yaml` pins `filename: "model.safetensors"` / `ckpt_file: "model.safetensors"` — the HF-released checkpoint is safetensors, not a Lightning `.ckpt`.
 - **GPT gene embeddings** (optional): if the datamodule's `VocabularyEncoderSimplified` provides `gpt_gene_embeddings`, `train.py` injects them into both the VAE input layer and (if `use_gpt_for_gene_ko=true`) the DiT's gene-KO conditioning — including the EMA DiT. Don't remove this injection logic silently.
 
-## NixOS specifics (pixi path only)
+## NixOS runtime notes
 
 - `flake.nix` devShell sets `LD_LIBRARY_PATH=/run/opengl-driver/lib` (for `libcuda.so.1`) and `TRITON_LIBCUDA_PATH=/run/opengl-driver/lib` (bypasses triton's hardcoded `/sbin/ldconfig` probe that fails on NixOS).
 - `cuda-cudart-dev` is in `[tool.pixi.dependencies]` because triton JIT-compiles a C helper on first use that `#include`s `cuda.h` — the runtime-only conda pytorch doesn't ship headers.
@@ -112,4 +112,4 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 - **Run:AI YAMLs** in `experiments/config/runai/` are launcher-side manifests (not Hydra configs); they aren't loaded by `train.py`.
 - **Stale-symbol diagnosis**: when a test fails with `ImportError` / `TypeError` on a symbol, run `git log --all -S '<symbol>' -- src/` before writing code — three symbols were referenced by tests but never shipped (`_random_mask`, `StraightLineDiffusion`, `DiT(use_adaln=...)`), all from an aborted refactor. `vae.py`'s `masking_prop` / `mask_token_idx` args are similar dead code (they're accepted by `TransformerVAE.forward` but the active `InputTransformerVAE.forward` takes only 2 args).
 - **Default paths** in `experiments/config/paths/user_paths.yaml` are repo-relative (`./model`, `./quickstart_data`, `./runs`, `./output`) and assume launch from repo root. Hydra 1.2+ defaults `hydra.job.chdir=false` so CWD doesn't change mid-run. The `../` paths in older forks are broken.
-- **Wandb** defaults to the caller's personal `api.wandb.ai` unless `WANDB_BASE_URL` is set (CZI's internal is `https://czi.wandb.io`, exported by `init.sh` but NOT by the flake/pixi path). `training/default.yaml` sets `entity: scg-vae`; `inference_fm.yaml` clears entity, so inference logs to the logged-in user's default namespace.
+- **Wandb** defaults to the caller's personal `api.wandb.ai`. Set `WANDB_BASE_URL` in the flake's shellHook if you want routing elsewhere (e.g. CZI internal at `https://czi.wandb.io`). `training/default.yaml` sets `entity: scg-vae`; `inference_fm.yaml` clears entity, so inference logs under the logged-in user's default namespace.
