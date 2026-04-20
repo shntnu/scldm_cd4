@@ -132,7 +132,7 @@ cuda-cudart-dev = "12.6.*"    # cuda.h + cuda_runtime.h for triton's JIT path (d
 lightning = "2.4.*"           # conda-forge name for PyPI `pytorch-lightning`
 torchmetrics = "1.6.*"
 hydra-core = "*"
-anndata = "*"
+anndata = ">=0.12.10,<0.13"
 wandb = "*"
 rich = "*"
 boto3 = "*"
@@ -147,6 +147,9 @@ cellxgene-census = "==1.16.2"
 # jax 0.6 renamed to `pjit_p`. Older numpyro works; scvi-tools 1.2.1 only
 # requires numpyro>=0.12.1 so this is safe.
 numpyro = "<0.20"
+matplotlib = ">=3.10.8,<4"
+pandas = ">=2.3.3,<3"
+scanpy = ">=1.11.5,<2"
 
 [tool.pixi.pypi-dependencies]
 # Editable install of this repo. pixi resolves [project].dependencies across
@@ -170,6 +173,7 @@ pytest-cov = "*"
 coverage = "*"
 ipykernel = "*"
 jupyterlab = "*"
+marimo = "*"                # reactive notebook UI; `pixi run marimo edit <file.py>`
 pre-commit = "*"
 poppler = "*"               # pdftotext / pdftoppm for reading PDFs in papers/
 
@@ -186,6 +190,14 @@ size-factors = "python scripts/compute_log_size_factors.py --config_path experim
 
 # Notebook
 jupyter = "jupyter lab notebooks/"
+
+# marimo reactive notebook (pair-programming-compatible via marimo-pair skill).
+# Port defaults to 48728 to avoid contention with the conventional 2718.
+# Launch from repo root; the notebook self-locates via Path(__file__).
+[tool.pixi.tasks.marimo-edit]
+cmd = "marimo edit notebooks/quickstart_tutorial.py --no-token --headless --port {{ port }}"
+args = [{ "arg" = "port", "default" = "48728" }]
+env = { PYTHONPATH = "src" }
 
 # Training / inference (mirror the torchrun invocations from README).
 # `gpus` is a positional arg, default 4 (this box).

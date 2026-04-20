@@ -197,3 +197,4 @@ result-*
 /model/
 /output/
 /runs/
+/inference_outputs/

@@ -125,3 +125,24 @@ INSTRUCTIONS: Add log at the end of the file. See "Maintenance Guidelines" and "
 ### Unresolved issues
 
 - **Deferred**: three design questions (latent vs. expression space, conditional-only vs. both splits, include R² or skip) — punt until we actually need the metrics. Nothing built yet.
+
+---
+
+## 2026-04-19: marimo port of quickstart tutorial + pair-programming skills
+
+### What was done
+
+- Installed `marimo-team/skills` + `marimo-team/marimo-pair` agent-skill packs into `.claude/skills/` via `npx skills`; pinned set via committed `skills-lock.json` (restore with `npx skills experimental_install`).
+- Converted `notebooks/quickstart_tutorial.ipynb` → `notebooks/quickstart_tutorial.py` via `uvx marimo convert`. Fixed the five `sc.pl.*` cells so plots render in marimo: `show=False, return_fig=True` as bare expressions (assigning to a named `fig` trips marimo's unique-globals-across-cells rule).
+- Added `marimo = "*"` to pixi dev deps + `pixi run marimo-edit` task (port 48728 default, sets `PYTHONPATH=src`).
+- Ran the notebook end-to-end from inside the kernel via the `marimo-pair` skill's `code_mode` API — no direct file writes, edits cascade through the reactive DAG. Inference: 4000 cells in ~5 min on 1× H100.
+
+### Key findings or decisions
+
+- Three edits needed to make the notebook actually run: (1) `Path(__file__).parent.parent` + `os.chdir(REPO_ROOT)` reconciles the notebook's `../`-paths with Hydra configs' `./`-paths, (2) `CHECKPOINT_PATH` → `model/model.safetensors` (the `last.ckpt` path from the original `.ipynb` never matched the HF release), (3) Hydra override `datamodule.datamodule.num_workers=0`.
+- **Latent pickling bug in `src/scg_vae/datamodule.py`**: `SimplifiedDataModule.setup()` defines lambdas at lines ~197/213/229/245 (and the twin class at ~560+). These don't pickle under torch's `spawn` DataLoader workers (used once CUDA is initialized). `num_workers=0` is the workaround; proper fix is hoisting to module-level `functools.partial`s.
+- marimo-pair requires `--no-token` servers (only those register in marimo's discovery); headless + SSH `-L` tunnel is the working pattern on this shared box.
+
+### Unresolved issues
+
+- `SimplifiedDataModule` lambdas still in source — filed as a follow-up; `num_workers=0` is a CPU-bound bottleneck, not a correctness issue.
