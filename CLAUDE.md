@@ -40,14 +40,16 @@ Pre-commit hooks are minimal (trailing whitespace, EOF, merge-conflict, private-
 All entry points are Hydra apps launched via `torchrun`. Pixi task aliases wrap the invocations:
 
 ```bash
-pixi run vae   [N]        # Stage 1 — Transformer VAE
-pixi run fm    [N]        # Stage 2 — flow-matching DiT on frozen VAE latents
-pixi run infer [N]        # inference from a pretrained checkpoint
+pixi run vae         [N]       # Stage 1 — Transformer VAE
+pixi run fm          [N]       # Stage 2 — flow-matching DiT on frozen VAE latents
+pixi run infer       [N]       # inference from a pretrained checkpoint
+pixi run marimo-edit [port]    # marimo reactive editor on quickstart_tutorial.py
+                               # (defaults to port 48728; sets PYTHONPATH=src)
 ```
 
 The raw `torchrun --nnodes 1 --nproc-per-node N experiments/scripts/{train,inference_ddp}.py --config-name=...` form still works if you need flags the tasks don't expose.
 
-The tutorial notebook `notebooks/quickstart_tutorial.ipynb` drives inference on a single GPU (CPU-only inference is untested). The size-factor precompute step (`scripts/compute_log_size_factors.py`) is required before training or inference on **new** data; quickstart data under `quickstart_data/size_factors_hvg/` is already precomputed.
+The tutorial notebook exists in two formats: `notebooks/quickstart_tutorial.ipynb` (jupyter) and `notebooks/quickstart_tutorial.py` (marimo, launched via `pixi run marimo-edit`). Both drive inference on a single GPU (CPU-only inference is untested). The size-factor precompute step (`scripts/compute_log_size_factors.py`) is required before training or inference on **new** data; quickstart data under `quickstart_data/size_factors_hvg/` is already precomputed.
 
 ## Config structure (Hydra)
 
@@ -103,6 +105,8 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 
 `tests/` — small CPU-runnable tests for encoder, layers, masks, diffusion round-trips, misc utilities. `tests/conftest.py` builds synthetic sparse AnnDatas.
 
+`.claude/skills/` (gitignored) — agent skills installed via `npx skills` (lock at repo-root `skills-lock.json`). Currently: marimo-team's 10 skills + `marimo-pair` for live-kernel pair programming. Restore on a fresh checkout with `npx skills experimental_install`.
+
 ## Conventions to preserve when editing
 
 - **Don't hand-edit the VAE block out of FM configs** — its encoder dims (`n_embed`, `n_embed_latent`, `n_inducing_points`) are interpolated into DiT and the tokenizer loader.
@@ -112,4 +116,7 @@ Custom Hydra resolver `${eval:'...'}` is registered in `main()` — use it for c
 - **Run:AI YAMLs** in `experiments/config/runai/` are launcher-side manifests (not Hydra configs); they aren't loaded by `train.py`.
 - **Stale-symbol diagnosis**: when a test fails with `ImportError` / `TypeError` on a symbol, run `git log --all -S '<symbol>' -- src/` before writing code — three symbols were referenced by tests but never shipped (`_random_mask`, `StraightLineDiffusion`, `DiT(use_adaln=...)`), all from an aborted refactor. `vae.py`'s `masking_prop` / `mask_token_idx` args are similar dead code (they're accepted by `TransformerVAE.forward` but the active `InputTransformerVAE.forward` takes only 2 args).
 - **Default paths** in `experiments/config/paths/user_paths.yaml` are repo-relative (`./model`, `./quickstart_data`, `./runs`, `./output`) and assume launch from repo root. Hydra 1.2+ defaults `hydra.job.chdir=false` so CWD doesn't change mid-run. The `../` paths in older forks are broken.
+- **Two CWD conventions collide in the notebook.** Hydra configs use `./`-relative paths (repo-root CWD); `notebooks/quickstart_tutorial.py` itself uses `../`-relative paths (notebooks/ CWD). The marimo port reconciles both via `Path(__file__).resolve().parent.parent` + `os.chdir(REPO_ROOT)` in its setup cell — keep that pattern if you add more path constants to that notebook.
+- **`src/notebook_inference.py` is a top-level module in `src/`, not inside `scg_vae/`** — the hatchling editable install doesn't expose it. Notebook kernels need `PYTHONPATH=src` (the `pixi run marimo-edit` task sets this; jupyter sets CWD to the `.ipynb`'s dir and falls through differently).
+- **`SimplifiedDataModule.setup()` defines local lambdas** (`src/scg_vae/datamodule.py` ~L197/213/229/245 + twin class at ~L560+) that don't pickle under torch's `spawn` DataLoader workers (default once CUDA is initialized). Interactive inference must pass `datamodule.datamodule.num_workers=0` as a Hydra override; real fix is hoisting to module-level `functools.partial`s.
 - **Wandb** defaults to the caller's personal `api.wandb.ai`. Set `WANDB_BASE_URL` in the flake's shellHook if you want routing elsewhere (e.g. CZI internal at `https://czi.wandb.io`). `training/default.yaml` sets `entity: scg-vae`; `inference_fm.yaml` clears entity, so inference logs under the logged-in user's default namespace.
