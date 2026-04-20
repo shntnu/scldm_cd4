@@ -4,7 +4,7 @@ import torch
 
 # Import layers to reset global variables
 import scg_vae.layers
-from scg_vae.diffusion import FlowMatching, StraightLineDiffusion
+from scg_vae.diffusion import FlowMatching
 from scg_vae.nnets import DiT
 
 
@@ -13,12 +13,10 @@ from scg_vae.nnets import DiT
 @pytest.mark.parametrize("n_embed_latent", [16])
 @pytest.mark.parametrize("n_embed_diffusion", [16])
 @pytest.mark.parametrize("sigma", [0.05])
-@pytest.mark.parametrize("v", [0.01])
 @pytest.mark.parametrize("timesteps", [10])
 @pytest.mark.parametrize("norm_layer", ["layernorm"])
-@pytest.mark.parametrize("use_adaln", [True, False])
 def test_diffusion(
-    n_samples, n_inducing_points, n_embed_latent, n_embed_diffusion, sigma, v, timesteps, norm_layer, use_adaln
+    n_samples, n_inducing_points, n_embed_latent, n_embed_diffusion, sigma, timesteps, norm_layer
 ):
     # Force CPU device for all operations
     device = torch.device("cpu")
@@ -40,13 +38,9 @@ def test_diffusion(
         norm_layer=norm_layer,
         multiple_of=2,
         layernorm_eps=1e-6,
-        use_adaln=use_adaln,
         class_vocab_sizes={"assay": 1, "suspension": 1},
     ).to(device)
 
-    sldm = StraightLineDiffusion(
-        nnet=nnet, n_inducing_points=n_inducing_points, sigma=sigma, v=v, timesteps=timesteps
-    ).to(device)
     fm = FlowMatching(nnet=nnet, n_inducing_points=n_inducing_points, sigma=sigma, timesteps=timesteps).to(device)
 
     x = torch.randn((n_samples, n_inducing_points, n_embed_diffusion), device=device)
@@ -55,13 +49,9 @@ def test_diffusion(
         "suspension": torch.randint(0, 1, (n_samples,), device=device),
     }
 
-    log_p = sldm.log_prob(x, condition)
-    x_sample = sldm.sample(n_samples=n_samples, condition=condition)
     log_p_fm = fm.log_prob(x, condition)
     x_sample_fm = fm.sample(n_samples=n_samples, condition=condition)
 
-    assert (n_samples == log_p.shape[0]) and (n_inducing_points == log_p.shape[1])
-    assert (n_samples == x_sample.shape[0]) and (n_inducing_points == x_sample.shape[1])
     assert (n_samples == log_p_fm.shape[0]) and (n_inducing_points == log_p_fm.shape[1])
     assert (n_samples == x_sample_fm.shape[0]) and (n_inducing_points == x_sample_fm.shape[1])
 
