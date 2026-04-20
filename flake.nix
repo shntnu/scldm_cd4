@@ -29,6 +29,11 @@
 
           # Use system NVIDIA driver libraries to avoid version mismatch
           LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+
+          # Triton probes `/sbin/ldconfig` to locate libcuda.so.1, which doesn't
+          # exist on NixOS. TRITON_LIBCUDA_PATH overrides that probe with a
+          # direct directory, unblocking deepspeed/triton-based imports.
+          TRITON_LIBCUDA_PATH = "/run/opengl-driver/lib";
         };
       });
 }

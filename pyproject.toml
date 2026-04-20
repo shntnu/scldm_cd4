@@ -128,6 +128,7 @@ cuda = "12.6"
 python = "3.11.*"
 pytorch = "2.7.*"             # conda-forge name for PyPI `torch`; pixi aliases them
 cuda-version = "12.6.*"       # conda-forge pulls matching cudnn/nccl as transitive deps
+cuda-cudart-dev = "12.6.*"    # cuda.h + cuda_runtime.h for triton's JIT path (deepspeed)
 lightning = "2.4.*"           # conda-forge name for PyPI `pytorch-lightning`
 torchmetrics = "1.6.*"
 hydra-core = "*"
