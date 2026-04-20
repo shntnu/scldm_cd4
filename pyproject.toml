@@ -171,6 +171,7 @@ coverage = "*"
 ipykernel = "*"
 jupyterlab = "*"
 pre-commit = "*"
+poppler = "*"               # pdftotext / pdftoppm for reading PDFs in papers/
 
 [tool.pixi.environments]
 default = { features = [ "dev" ], solve-group = "default" }
